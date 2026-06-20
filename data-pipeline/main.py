@@ -12,7 +12,7 @@ import numpy as np
 app = FastAPI(title="Climate Data Ingestion & Fusion Engine", version="2.0.0")
 
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/climatedb")
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 class IngestionRequest(BaseModel):
     timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
@@ -146,11 +146,13 @@ def ingest_and_fuse(req: IngestionRequest):
 
     # Establish Postgres connection
     db_conn = None
-    try:
-        db_conn = psycopg2.connect(DATABASE_URL, connect_timeout=1)
-        db_cursor = db_conn.cursor()
-    except Exception:
-        db_cursor = None
+    db_cursor = None
+    if DATABASE_URL:
+        try:
+            db_conn = psycopg2.connect(DATABASE_URL, connect_timeout=1)
+            db_cursor = db_conn.cursor()
+        except Exception:
+            db_cursor = None
 
     for cell in GLOBAL_LAND_GRID:
         raw_data = get_climate_for_coords(cell["lat"], cell["lon"], cell["country"], date)
@@ -179,6 +181,7 @@ def ingest_and_fuse(req: IngestionRequest):
                 ))
             except Exception:
                 db_conn.rollback()
+                db_cursor = None
 
     if db_conn:
         db_conn.commit()
