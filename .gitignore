@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.env
+
+# Node
+node_modules/
+dist/
+build/
+.next/
+.eslintcache
+
+# System / IDE
+.DS_Store
+.vscode/
+.idea/
