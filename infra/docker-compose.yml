@@ -87,7 +87,7 @@ services:
       context: ../frontend
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "3000:5173"
     depends_on:
       - api-gateway
     restart: always

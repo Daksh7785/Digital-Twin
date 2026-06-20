@@ -5,3 +5,7 @@ pandas
 pydantic
 python-dotenv
 httpx
+redis
+psycopg2-binary
+python-multipart
+
