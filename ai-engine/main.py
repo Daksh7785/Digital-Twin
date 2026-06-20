@@ -155,22 +155,65 @@ def get_forecast(lat: float, lon: float):
     forecast_data = forecaster.forecast_point(features, steps=7)
     return {"lat": lat, "lon": lon, "forecast": forecast_data}
 
+def run_kalman_filter_1d(forecast_val: float, obs_val: float, forecast_var: float, obs_var: float):
+    """
+    Standard 1D Kalman Filter state correction (data assimilation).
+    Fuses simulated forecast prior with ground observation.
+    """
+    # Kalman Gain: K = Pf / (Pf + R)
+    k_gain = forecast_var / (forecast_var + obs_var)
+    # Updated (Assimilated) State: Xa = Xf + K * (Z - Xf)
+    assimilated_state = forecast_val + k_gain * (obs_val - forecast_val)
+    # Updated Error Covariance: Pa = (1 - K) * Pf
+    updated_variance = (1.0 - k_gain) * forecast_var
+    return float(assimilated_state), float(updated_variance)
+
 @app.post("/api/verify")
 def verify_and_adapt(params: VerificationInput):
     enso = 0.2
     iod = -0.1
     seasonal_sine = 0.7
-    features = np.array([[params.lat, params.lon, enso, iod, seasonal_sine]])
+    features = [params.lat, params.lon, enso, iod, seasonal_sine]
     
+    # 1. Generate prior weather forecast from ML engine (Step 1 forecast)
+    prior_forecast = forecaster.forecast_point(features, steps=1)[0]
+    prior_temp = prior_forecast["temperature"]["p50"]
+    prior_rain = prior_forecast["rainfall"]["p50"]
+    
+    # 2. Extract prediction variance/spread (p90 - p10 is proportional to standard deviation)
+    temp_variance = max(0.5, ((prior_forecast["temperature"]["p90"] - prior_forecast["temperature"]["p10"]) / 2.56) ** 2)
+    rain_variance = max(1.0, ((prior_forecast["rainfall"]["p90"] - prior_forecast["rainfall"]["p10"]) / 2.56) ** 2)
+    
+    # 3. Define observation variance R (IMD gridded data high reliability, sensor noise is small)
+    obs_temp_variance = 0.25 # standard deviation = 0.5C
+    obs_rain_variance = 1.0  # standard deviation = 1.0mm
+    
+    # 4. Perform Data Assimilation via Kalman Filter
+    assimilated_temp, post_temp_var = run_kalman_filter_1d(prior_temp, params.observed_temp, temp_variance, obs_temp_variance)
+    assimilated_rain, post_rain_var = run_kalman_filter_1d(prior_rain, params.observed_rain, rain_variance, obs_rain_variance)
+    
+    # 5. Trigger offline network weight update using backprop
     loss_val = forecaster.retrain_step(
-        features,
+        np.array([features]),
         np.array([params.observed_temp]),
         np.array([params.observed_rain])
     )
     
-    # Return verification metrics
     return {
         "status": "success",
         "loss": loss_val,
-        "adapted_forecast": forecaster.forecast_point([params.lat, params.lon, enso, iod, seasonal_sine], steps=1)[0]
+        "metrics": {
+            "temperature_error": float(abs(prior_temp - params.observed_temp)),
+            "rainfall_error": float(abs(prior_rain - params.observed_rain))
+        },
+        "prior_state": {
+            "temperature": prior_temp,
+            "rainfall": prior_rain
+        },
+        "assimilated_state": {
+            "temperature": assimilated_temp,
+            "rainfall": max(0.0, assimilated_rain),
+            "temp_uncertainty_reduction": float((temp_variance - post_temp_var) / temp_variance * 100.0),
+            "rain_uncertainty_reduction": float((rain_variance - post_rain_var) / rain_variance * 100.0)
+        }
     }
