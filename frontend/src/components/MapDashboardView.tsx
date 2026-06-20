@@ -74,8 +74,90 @@ export const MapDashboardView: React.FC<MapViewProps> = ({ grid, selectedParam, 
     }
   };
 
+  const [focusLocation, setFocusLocation] = useState<[number, number] | null>(null);
+
+  // Focus action component inside Leaflet context
+  const FocusManager = () => {
+    const map = useMap();
+    useEffect(() => {
+      if (focusLocation) {
+        map.setView(focusLocation, 6, { animate: true });
+        setFocusLocation(null);
+      }
+    }, [map]);
+    return null;
+  };
+
   return (
     <div className="glass" style={{ height: "550px", overflow: "hidden", position: "relative" }}>
+      {/* Quick Location Shortcuts */}
+      <div style={{ position: "absolute", top: "10px", right: "10px", zIndex: 1000, display: "flex", gap: "0.5rem" }}>
+        {[
+          { name: "Central India", coords: [21.5, 77.5] },
+          { name: "Himalayas", coords: [32.5, 76.0] },
+          { name: "Western Ghats", coords: [12.0, 75.5] }
+        ].map((loc) => (
+          <button
+            key={loc.name}
+            onClick={() => setFocusLocation(loc.coords as [number, number])}
+            style={{
+              padding: "0.4rem 0.6rem",
+              borderRadius: "4px",
+              backgroundColor: "rgba(15, 23, 42, 0.85)",
+              border: "1px solid rgba(255, 255, 255, 0.15)",
+              color: "#60a5fa",
+              fontSize: "0.75rem",
+              cursor: "pointer",
+              fontWeight: "600"
+            }}
+          >
+            📍 {loc.name}
+          </button>
+        ))}
+      </div>
+
+      {/* Dynamic Layer Legend */}
+      <div style={{
+        position: "absolute",
+        bottom: "20px",
+        left: "20px",
+        zIndex: 1000,
+        backgroundColor: "rgba(15, 23, 42, 0.85)",
+        border: "1px solid rgba(255, 255, 255, 0.15)",
+        padding: "0.75rem",
+        borderRadius: "6px",
+        fontSize: "0.7rem",
+        color: "#f1f5f9"
+      }}>
+        <div style={{ fontWeight: "bold", marginBottom: "0.4rem", textTransform: "capitalize" }}>
+          {selectedParam.replace("_", " ")} Legend
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+          {selectedParam === "rainfall" ? (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#1d4ed8", display: "inline-block" }}></span> &gt; 80 mm (Heavy)</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#2563eb", display: "inline-block" }}></span> 40 - 80 mm</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#3b82f6", display: "inline-block" }}></span> 15 - 40 mm</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#60a5fa", display: "inline-block" }}></span> &lt; 15 mm (Light)</div>
+            </>
+          ) : (selectedParam === "temperature" || selectedParam === "lst" || selectedParam === "sst") ? (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#ef4444", display: "inline-block" }}></span> &gt; 38 °C (Extreme)</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#f97316", display: "inline-block" }}></span> 30 - 38 °C</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#eab308", display: "inline-block" }}></span> 24 - 30 °C</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#10b981", display: "inline-block" }}></span> &lt; 24 °C (Cool)</div>
+            </>
+          ) : (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#ef4444", display: "inline-block" }}></span> &gt; 0.8 (Critical)</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#f97316", display: "inline-block" }}></span> 0.5 - 0.8 (Warning)</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#eab308", display: "inline-block" }}></span> 0.25 - 0.5 (Watch)</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#10b981", display: "inline-block" }}></span> &lt; 0.25 (Safe)</div>
+            </>
+          )}
+        </div>
+      </div>
+
       <MapContainer
         center={[21.0, 78.0]}
         zoom={5}
@@ -87,7 +169,6 @@ export const MapDashboardView: React.FC<MapViewProps> = ({ grid, selectedParam, 
         />
         
         {grid.map((pixel: any, idx) => {
-          // Dynamic property selection
           const value = pixel[selectedParam] !== undefined ? pixel[selectedParam] : pixel.temperature;
           const color = getColor(value, selectedParam);
           const radius = selectedParam === "rainfall" ? Math.max(8, Math.min(22, value * 0.6)) : 14;
@@ -119,6 +200,7 @@ export const MapDashboardView: React.FC<MapViewProps> = ({ grid, selectedParam, 
           );
         })}
         <MapEvents grid={grid} onZoomChange={onZoomChange} />
+        <FocusManager />
       </MapContainer>
     </div>
   );
