@@ -178,6 +178,7 @@ function App() {
             selectedParam={selectedParam}
             onSelectPixel={(lat, lon) => setSelectedPixel({ lat, lon })}
             onZoomChange={setZoom}
+            selectedPixel={selectedPixel}
           />
         </section>
 

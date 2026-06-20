@@ -16,6 +16,7 @@ interface MapViewProps {
   selectedParam: "temperature" | "rainfall" | "lst" | "sst" | "risk_index" | "flood_risk" | "drought_risk" | "heatwave_risk";
   onSelectPixel: (lat: number, lon: number) => void;
   onZoomChange?: (zoom: number) => void;
+  selectedPixel?: { lat: number; lon: number } | null;
 }
 
 // Component to dynamically adjust map center bounds and capture zoom changes
@@ -51,7 +52,7 @@ function MapEvents({ grid, onZoomChange }: { grid: any[]; onZoomChange?: (zoom: 
   return null;
 }
 
-export const MapDashboardView: React.FC<MapViewProps> = ({ grid, selectedParam, onSelectPixel, onZoomChange }) => {
+export const MapDashboardView: React.FC<MapViewProps> = ({ grid, selectedParam, onSelectPixel, onZoomChange, selectedPixel }) => {
   const getColor = (val: number, param: string) => {
     if (param === "temperature" || param === "lst" || param === "sst") {
       if (val > 38) return "#ef4444";
@@ -171,16 +172,17 @@ export const MapDashboardView: React.FC<MapViewProps> = ({ grid, selectedParam, 
         {grid.map((pixel: any, idx) => {
           const value = pixel[selectedParam] !== undefined ? pixel[selectedParam] : pixel.temperature;
           const color = getColor(value, selectedParam);
+          const isSelected = selectedPixel && Math.abs(pixel.lat - selectedPixel.lat) < 0.01 && Math.abs(pixel.lon - selectedPixel.lon) < 0.01;
           const radius = selectedParam === "rainfall" ? Math.max(8, Math.min(22, value * 0.6)) : 14;
           
           return (
             <CircleMarker
               key={idx}
               center={[pixel.lat, pixel.lon]}
-              radius={radius}
+              radius={isSelected ? radius + 3 : radius}
               fillColor={color}
-              color="#ffffff"
-              weight={0.5}
+              color={isSelected ? "#eab308" : "#ffffff"}
+              weight={isSelected ? 3.0 : 0.5}
               fillOpacity={0.65}
               eventHandlers={{
                 click: () => onSelectPixel(pixel.lat, pixel.lon)
