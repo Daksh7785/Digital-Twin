@@ -2,24 +2,15 @@ import React, { useEffect, useState } from "react";
 import { MapContainer, TileLayer, CircleMarker, Popup, useMap } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 
-interface GridPixel {
-  lat: number;
-  lon: number;
-  temperature: number;
-  rainfall: number;
-  lst: number;
-  sst: number;
-}
-
 interface MapViewProps {
   grid: any[];
-  selectedParam: "temperature" | "rainfall" | "lst" | "sst" | "risk_index" | "flood_risk" | "drought_risk" | "heatwave_risk";
+  selectedParam: "temperature" | "rainfall" | "lst" | "sst" | "risk_index" | "anomaly_score";
   onSelectPixel: (lat: number, lon: number) => void;
+  onHoverPixel: (pixel: any | null) => void;
   onZoomChange?: (zoom: number) => void;
   selectedPixel?: { lat: number; lon: number } | null;
 }
 
-// Component to dynamically adjust map center bounds and capture zoom changes
 function MapEvents({ grid, onZoomChange }: { grid: any[]; onZoomChange?: (zoom: number) => void }) {
   const map = useMap();
   
@@ -32,8 +23,8 @@ function MapEvents({ grid, onZoomChange }: { grid: any[]; onZoomChange?: (zoom: 
       const minLon = Math.min(...lons);
       const maxLon = Math.max(...lons);
       map.fitBounds([
-        [minLat - 0.5, minLon - 0.5],
-        [maxLat + 0.5, maxLon + 0.5]
+        [minLat - 1.0, minLon - 1.0],
+        [maxLat + 1.0, maxLon + 1.0]
       ]);
     }
   }, [grid, map]);
@@ -52,37 +43,54 @@ function MapEvents({ grid, onZoomChange }: { grid: any[]; onZoomChange?: (zoom: 
   return null;
 }
 
-export const MapDashboardView: React.FC<MapViewProps> = ({ grid, selectedParam, onSelectPixel, onZoomChange, selectedPixel }) => {
+export const MapDashboardView: React.FC<MapViewProps> = ({
+  grid,
+  selectedParam,
+  onSelectPixel,
+  onHoverPixel,
+  onZoomChange,
+  selectedPixel
+}) => {
+  
+  // Custom Map Color System
   const getColor = (val: number, param: string) => {
-    if (param === "temperature" || param === "lst" || param === "sst") {
-      if (val > 38) return "#ef4444";
-      if (val > 30) return "#f97316";
-      if (val > 24) return "#eab308";
-      if (val > 15) return "#10b981";
-      return "#3b82f6";
+    if (param === "temperature" || param === "lst") {
+      // blue (cold) -> green -> orange -> red (heatwave)
+      if (val > 35) return "#ef4444"; // Red
+      if (val > 28) return "#f97316"; // Orange
+      if (val > 18) return "#22c55e"; // Green
+      return "#3b82f6"; // Blue
     } else if (param === "rainfall") {
-      if (val > 80) return "#1d4ed8";
-      if (val > 40) return "#2563eb";
+      // blue -> purple -> red gradient
+      if (val > 50) return "#dc2626"; // Red
+      if (val > 20) return "#8b5cf6"; // Purple
+      if (val > 5) return "#2563eb"; // Blue
+      return "rgba(59, 130, 246, 0.2)";
+    } else if (param === "sst") {
+      if (val > 25) return "#ec4899"; // Pink (Warm pool)
       if (val > 15) return "#3b82f6";
-      if (val > 2) return "#60a5fa";
-      return "rgba(255,255,255,0.1)";
+      return "#1d4ed8";
+    } else if (param === "anomaly_score") {
+      // Cyan -> Magenta -> Dark Red
+      if (val > 0.7) return "#880808";
+      if (val > 0.4) return "#d946ef";
+      return "#06b6d4";
     } else {
-      // Risk layers (0 to 1 range)
-      if (val > 0.8) return "#ef4444"; // Red (Critical)
-      if (val > 0.5) return "#f97316"; // Orange (Warning)
-      if (val > 0.25) return "#eab308"; // Yellow (Advisory)
-      return "#10b981"; // Green (Normal)
+      // Risk layers (0 to 1 range): green -> yellow -> orange -> red
+      if (val > 0.75) return "#ef4444"; // Red
+      if (val > 0.50) return "#f97316"; // Orange
+      if (val > 0.25) return "#eab308"; // Yellow
+      return "#22c55e"; // Green
     }
   };
 
   const [focusLocation, setFocusLocation] = useState<[number, number] | null>(null);
 
-  // Focus action component inside Leaflet context
   const FocusManager = () => {
     const map = useMap();
     useEffect(() => {
       if (focusLocation) {
-        map.setView(focusLocation, 6, { animate: true });
+        map.setView(focusLocation, 5, { animate: true });
         setFocusLocation(null);
       }
     }, [map]);
@@ -90,112 +98,125 @@ export const MapDashboardView: React.FC<MapViewProps> = ({ grid, selectedParam, 
   };
 
   return (
-    <div className="glass" style={{ height: "550px", overflow: "hidden", position: "relative" }}>
+    <div className="glass" style={{ height: "600px", overflow: "hidden", position: "relative" }}>
       {/* Quick Location Shortcuts */}
-      <div style={{ position: "absolute", top: "10px", right: "10px", zIndex: 1000, display: "flex", gap: "0.5rem" }}>
+      <div style={{ position: "absolute", top: "15px", right: "15px", zIndex: 1000, display: "flex", gap: "0.5rem" }}>
         {[
-          { name: "Central India", coords: [21.5, 77.5] },
-          { name: "Himalayas", coords: [32.5, 76.0] },
-          { name: "Western Ghats", coords: [12.0, 75.5] }
+          { name: "South Asia (India)", coords: [21.0, 78.0] },
+          { name: "North America (USA)", coords: [37.0, -95.0] },
+          { name: "South America (Brazil)", coords: [-15.0, -55.0] },
+          { name: "Europe", coords: [48.0, 14.0] }
         ].map((loc) => (
           <button
             key={loc.name}
             onClick={() => setFocusLocation(loc.coords as [number, number])}
             style={{
-              padding: "0.4rem 0.6rem",
-              borderRadius: "4px",
-              backgroundColor: "rgba(15, 23, 42, 0.85)",
+              padding: "0.4rem 0.75rem",
+              borderRadius: "6px",
+              backgroundColor: "rgba(10, 15, 30, 0.9)",
               border: "1px solid rgba(255, 255, 255, 0.15)",
-              color: "#60a5fa",
+              color: "#3b82f6",
               fontSize: "0.75rem",
               cursor: "pointer",
-              fontWeight: "600"
+              fontWeight: "bold",
+              transition: "all 0.2s"
             }}
+            onMouseOver={(e) => (e.currentTarget.style.borderColor = "#3b82f6")}
+            onMouseOut={(e) => (e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.15)")}
           >
             📍 {loc.name}
           </button>
         ))}
       </div>
 
-      {/* Dynamic Layer Legend */}
+      {/* Dynamic Color Scale Legend */}
       <div style={{
         position: "absolute",
         bottom: "20px",
         left: "20px",
         zIndex: 1000,
-        backgroundColor: "rgba(15, 23, 42, 0.85)",
+        backgroundColor: "rgba(10, 15, 30, 0.9)",
         border: "1px solid rgba(255, 255, 255, 0.15)",
-        padding: "0.75rem",
-        borderRadius: "6px",
-        fontSize: "0.7rem",
-        color: "#f1f5f9"
+        padding: "1rem",
+        borderRadius: "8px",
+        fontSize: "0.75rem",
+        color: "#f1f5f9",
+        width: "180px"
       }}>
-        <div style={{ fontWeight: "bold", marginBottom: "0.4rem", textTransform: "capitalize" }}>
+        <div style={{ fontWeight: "bold", marginBottom: "0.5rem", textTransform: "capitalize" }}>
           {selectedParam.replace("_", " ")} Legend
         </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem" }}>
           {selectedParam === "rainfall" ? (
             <>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#1d4ed8", display: "inline-block" }}></span> &gt; 80 mm (Heavy)</div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#2563eb", display: "inline-block" }}></span> 40 - 80 mm</div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#3b82f6", display: "inline-block" }}></span> 15 - 40 mm</div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#60a5fa", display: "inline-block" }}></span> &lt; 15 mm (Light)</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}><span style={{ width: "12px", height: "12px", backgroundColor: "#dc2626", borderRadius: "2px" }}></span> &gt; 50 mm (Heavy)</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}><span style={{ width: "12px", height: "12px", backgroundColor: "#8b5cf6", borderRadius: "2px" }}></span> 20 - 50 mm</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}><span style={{ width: "12px", height: "12px", backgroundColor: "#2563eb", borderRadius: "2px" }}></span> &lt; 20 mm</div>
             </>
-          ) : (selectedParam === "temperature" || selectedParam === "lst" || selectedParam === "sst") ? (
+          ) : (selectedParam === "temperature" || selectedParam === "lst") ? (
             <>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#ef4444", display: "inline-block" }}></span> &gt; 38 °C (Extreme)</div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#f97316", display: "inline-block" }}></span> 30 - 38 °C</div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#eab308", display: "inline-block" }}></span> 24 - 30 °C</div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#10b981", display: "inline-block" }}></span> &lt; 24 °C (Cool)</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}><span style={{ width: "12px", height: "12px", backgroundColor: "#ef4444", borderRadius: "2px" }}></span> &gt; 35 °C (Extreme)</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}><span style={{ width: "12px", height: "12px", backgroundColor: "#f97316", borderRadius: "2px" }}></span> 28 - 35 °C</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}><span style={{ width: "12px", height: "12px", backgroundColor: "#22c55e", borderRadius: "2px" }}></span> 18 - 28 °C</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}><span style={{ width: "12px", height: "12px", backgroundColor: "#3b82f6", borderRadius: "2px" }}></span> &lt; 18 °C (Cold)</div>
+            </>
+          ) : selectedParam === "anomaly_score" ? (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}><span style={{ width: "12px", height: "12px", backgroundColor: "#880808", borderRadius: "2px" }}></span> Critical Anomaly</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}><span style={{ width: "12px", height: "12px", backgroundColor: "#d946ef", borderRadius: "2px" }}></span> Moderate Anomaly</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}><span style={{ width: "12px", height: "12px", backgroundColor: "#06b6d4", borderRadius: "2px" }}></span> Normal / Safe</div>
             </>
           ) : (
             <>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#ef4444", display: "inline-block" }}></span> &gt; 0.8 (Critical)</div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#f97316", display: "inline-block" }}></span> 0.5 - 0.8 (Warning)</div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#eab308", display: "inline-block" }}></span> 0.25 - 0.5 (Watch)</div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><span style={{ width: "10px", height: "10px", backgroundColor: "#10b981", display: "inline-block" }}></span> &lt; 0.25 (Safe)</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}><span style={{ width: "12px", height: "12px", backgroundColor: "#ef4444", borderRadius: "2px" }}></span> Critical Risk</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}><span style={{ width: "12px", height: "12px", backgroundColor: "#f97316", borderRadius: "2px" }}></span> High Warning</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}><span style={{ width: "12px", height: "12px", backgroundColor: "#eab308", borderRadius: "2px" }}></span> Moderate Risk</div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}><span style={{ width: "12px", height: "12px", backgroundColor: "#22c55e", borderRadius: "2px" }}></span> Normal / Safe</div>
             </>
           )}
         </div>
       </div>
 
       <MapContainer
-        center={[21.0, 78.0]}
-        zoom={5}
-        style={{ height: "100%", width: "100%", background: "#0b0f19" }}
+        center={[20.0, 0.0]}
+        zoom={2}
+        style={{ height: "100%", width: "100%", background: "#060913" }}
+        maxBounds={[[-85, -180], [85, 180]]}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          attribution='&copy; CARTO'
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
         />
         
         {grid.map((pixel: any, idx) => {
           const value = pixel[selectedParam] !== undefined ? pixel[selectedParam] : pixel.temperature;
           const color = getColor(value, selectedParam);
-          const isSelected = selectedPixel && Math.abs(pixel.lat - selectedPixel.lat) < 0.01 && Math.abs(pixel.lon - selectedPixel.lon) < 0.01;
-          const radius = selectedParam === "rainfall" ? Math.max(8, Math.min(22, value * 0.6)) : 14;
+          const isSelected = selectedPixel && Math.abs(pixel.lat - selectedPixel.lat) < 0.1 && Math.abs(pixel.lon - selectedPixel.lon) < 0.1;
+          const radius = isSelected ? 18 : 12;
           
           return (
             <CircleMarker
               key={idx}
               center={[pixel.lat, pixel.lon]}
-              radius={isSelected ? radius + 3 : radius}
+              radius={radius}
               fillColor={color}
-              color={isSelected ? "#eab308" : "#ffffff"}
-              weight={isSelected ? 3.0 : 0.5}
-              fillOpacity={0.65}
+              color={isSelected ? "#3b82f6" : "#ffffff"}
+              weight={isSelected ? 3.0 : 0.4}
+              fillOpacity={0.7}
               eventHandlers={{
-                click: () => onSelectPixel(pixel.lat, pixel.lon)
+                click: () => onSelectPixel(pixel.lat, pixel.lon),
+                mouseover: () => onHoverPixel(pixel),
+                mouseout: () => onHoverPixel(null)
               }}
             >
               <Popup>
-                <div style={{ color: "#333", fontSize: "12px" }}>
-                  <strong>{pixel.state}, {pixel.country}</strong><br />
-                  Grid Coordinate: ({pixel.lat}, {pixel.lon})<br />
-                  Temperature: {pixel.temperature?.toFixed(2)} °C<br />
-                  Rainfall: {pixel.rainfall?.toFixed(2)} mm<br />
-                  INSAT LST: {pixel.lst?.toFixed(2)} °C<br />
-                  SST: {pixel.sst?.toFixed(2)} °C<br />
+                <div style={{ color: "#333", fontSize: "12px", fontFamily: "sans-serif" }}>
+                  <strong>{pixel.state_name || pixel.state}, {pixel.country_name || pixel.country}</strong><br />
+                  Grid Cell: ({pixel.lat}°, {pixel.lon}°)<br />
+                  Temperature: {pixel.temperature?.toFixed(1)} °C<br />
+                  Rainfall: {pixel.rainfall?.toFixed(1)} mm<br />
+                  INSAT LST: {pixel.lst?.toFixed(1)} °C<br />
+                  Anomaly Score: {pixel.anomaly_score?.toFixed(2)}<br />
                   Risk Index: {pixel.risk_index?.toFixed(2)}
                 </div>
               </Popup>
