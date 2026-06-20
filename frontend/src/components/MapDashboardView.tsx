@@ -12,14 +12,16 @@ interface GridPixel {
 }
 
 interface MapViewProps {
-  grid: GridPixel[];
-  selectedParam: "temperature" | "rainfall" | "lst";
+  grid: any[];
+  selectedParam: "temperature" | "rainfall" | "lst" | "sst" | "risk_index" | "flood_risk" | "drought_risk" | "heatwave_risk";
   onSelectPixel: (lat: number, lon: number) => void;
+  onZoomChange?: (zoom: number) => void;
 }
 
-// Component to dynamically adjust map center bounds
-function MapUpdater({ grid }: { grid: GridPixel[] }) {
+// Component to dynamically adjust map center bounds and capture zoom changes
+function MapEvents({ grid, onZoomChange }: { grid: any[]; onZoomChange?: (zoom: number) => void }) {
   const map = useMap();
+  
   useEffect(() => {
     if (grid && grid.length > 0) {
       const lats = grid.map(g => g.lat);
@@ -34,23 +36,41 @@ function MapUpdater({ grid }: { grid: GridPixel[] }) {
       ]);
     }
   }, [grid, map]);
+
+  useEffect(() => {
+    if (!onZoomChange) return;
+    const handleZoom = () => {
+      onZoomChange(map.getZoom());
+    };
+    map.on("zoomend", handleZoom);
+    return () => {
+      map.off("zoomend", handleZoom);
+    };
+  }, [map, onZoomChange]);
+
   return null;
 }
 
-export const MapDashboardView: React.FC<MapViewProps> = ({ grid, selectedParam, onSelectPixel }) => {
+export const MapDashboardView: React.FC<MapViewProps> = ({ grid, selectedParam, onSelectPixel, onZoomChange }) => {
   const getColor = (val: number, param: string) => {
-    if (param === "temperature") {
-      // Hot to Cold Gradient (Red to Blue)
-      if (val > 35) return "#ef4444";
+    if (param === "temperature" || param === "lst" || param === "sst") {
+      if (val > 38) return "#ef4444";
       if (val > 30) return "#f97316";
-      if (val > 25) return "#eab308";
+      if (val > 24) return "#eab308";
+      if (val > 15) return "#10b981";
       return "#3b82f6";
+    } else if (param === "rainfall") {
+      if (val > 80) return "#1d4ed8";
+      if (val > 40) return "#2563eb";
+      if (val > 15) return "#3b82f6";
+      if (val > 2) return "#60a5fa";
+      return "rgba(255,255,255,0.1)";
     } else {
-      // Precipitation / Wetness (Blue to Greenish light blue)
-      if (val > 50) return "#1d4ed8";
-      if (val > 20) return "#3b82f6";
-      if (val > 5) return "#60a5fa";
-      return "#93c5fd";
+      // Risk layers (0 to 1 range)
+      if (val > 0.8) return "#ef4444"; // Red (Critical)
+      if (val > 0.5) return "#f97316"; // Orange (Warning)
+      if (val > 0.25) return "#eab308"; // Yellow (Advisory)
+      return "#10b981"; // Green (Normal)
     }
   };
 
@@ -66,14 +86,17 @@ export const MapDashboardView: React.FC<MapViewProps> = ({ grid, selectedParam, 
           url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
         />
         
-        {grid.map((pixel, idx) => {
-          const value = selectedParam === "temperature" ? pixel.temperature : (selectedParam === "rainfall" ? pixel.rainfall : pixel.lst);
+        {grid.map((pixel: any, idx) => {
+          // Dynamic property selection
+          const value = pixel[selectedParam] !== undefined ? pixel[selectedParam] : pixel.temperature;
           const color = getColor(value, selectedParam);
+          const radius = selectedParam === "rainfall" ? Math.max(8, Math.min(22, value * 0.6)) : 14;
+          
           return (
             <CircleMarker
               key={idx}
               center={[pixel.lat, pixel.lon]}
-              radius={selectedParam === "rainfall" ? Math.max(8, Math.min(22, value * 0.6)) : 14}
+              radius={radius}
               fillColor={color}
               color="#ffffff"
               weight={0.5}
@@ -85,15 +108,17 @@ export const MapDashboardView: React.FC<MapViewProps> = ({ grid, selectedParam, 
               <Popup>
                 <div style={{ color: "#333", fontSize: "12px" }}>
                   <strong>Grid (Lat: {pixel.lat}, Lon: {pixel.lon})</strong><br />
-                  Temperature: {pixel.temperature.toFixed(2)} °C<br />
-                  Rainfall: {pixel.rainfall.toFixed(2)} mm<br />
-                  INSAT LST: {pixel.lst.toFixed(2)} °C
+                  Temperature: {pixel.temperature?.toFixed(2)} °C<br />
+                  Rainfall: {pixel.rainfall?.toFixed(2)} mm<br />
+                  INSAT LST: {pixel.lst?.toFixed(2)} °C<br />
+                  SST: {pixel.sst?.toFixed(2)} °C<br />
+                  Risk Index: {pixel.risk_index?.toFixed(2)}
                 </div>
               </Popup>
             </CircleMarker>
           );
         })}
-        <MapUpdater grid={grid} />
+        <MapEvents grid={grid} onZoomChange={onZoomChange} />
       </MapContainer>
     </div>
   );

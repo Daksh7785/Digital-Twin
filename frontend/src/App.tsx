@@ -27,16 +27,17 @@ interface Alert {
 function App() {
   const [grid, setGrid] = useState<GridPixel[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
-  const [selectedParam, setSelectedParam] = useState<"temperature" | "rainfall" | "lst">("temperature");
+  const [selectedParam, setSelectedParam] = useState<"temperature" | "rainfall" | "lst" | "sst" | "risk_index" | "flood_risk" | "drought_risk" | "heatwave_risk">("temperature");
   const [selectedPixel, setSelectedPixel] = useState<{ lat: number; lon: number } | null>(null);
   const [forecast, setForecast] = useState<any[]>([]);
   const [globalDrivers, setGlobalDrivers] = useState<{ enso: number; iod: number }>({ enso: 0, iod: 0 });
   const [systemTime, setSystemTime] = useState<string>("");
+  const [zoom, setZoom] = useState<number>(5.0);
   const wsRef = useRef<WebSocket | null>(null);
 
   // Initialize socket stream connection for dynamic real-time twin state feeds
   useEffect(() => {
-    fetchInitialState();
+    fetchInitialState(zoom);
     fetchAlerts();
 
     wsRef.current = new WebSocket("ws://localhost:8000/ws/stream");
@@ -52,6 +53,11 @@ function App() {
     };
   }, []);
 
+  // Fetch state on zoom changes
+  useEffect(() => {
+    fetchInitialState(zoom);
+  }, [zoom]);
+
   // Fetch forecast when a pixel coordinate is selected
   useEffect(() => {
     if (selectedPixel) {
@@ -59,13 +65,17 @@ function App() {
     }
   }, [selectedPixel, systemTime]);
 
-  const fetchInitialState = async () => {
+  const fetchInitialState = async (currentZoom: number) => {
     try {
-      const res = await fetch("http://localhost:8000/api/state");
+      const res = await fetch(`http://localhost:8000/api/state?zoom=${currentZoom}`);
       const data = await res.json();
-      setGrid(data.grid);
-      setGlobalDrivers(data.global_drivers);
-      setSystemTime(data.timestamp);
+      setGrid(data.grid || data.geojson?.features.map((f: any) => ({
+        lat: f.geometry.coordinates[1],
+        lon: f.geometry.coordinates[0],
+        ...f.properties
+      })) || []);
+      if (data.global_drivers) setGlobalDrivers(data.global_drivers);
+      if (data.timestamp) setSystemTime(data.timestamp);
     } catch (e) {
       console.error("Connection error loading initial state:", e);
     }
@@ -138,26 +148,26 @@ function App() {
       <main style={{ display: "grid", gridTemplateColumns: "3fr 1.2fr", gap: "1.5rem", alignItems: "start" }}>
         {/* Left Column Map Panel */}
         <section style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-          <div className="glass" style={{ padding: "1rem", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: "0.9rem", color: "#94a3b8" }}>Grid Visualization Parameter:</span>
-            <div style={{ display: "flex", gap: "0.5rem" }}>
-              {(["temperature", "rainfall", "lst"] as const).map((param) => (
+          <div className="glass" style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <span style={{ fontSize: "0.9rem", color: "#94a3b8", fontWeight: "bold" }}>Grid Visualization Layer:</span>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              {(["temperature", "rainfall", "lst", "sst", "risk_index", "flood_risk", "drought_risk", "heatwave_risk"] as const).map((param) => (
                 <button
                   key={param}
                   onClick={() => setSelectedParam(param)}
                   style={{
-                    padding: "0.4rem 1rem",
+                    padding: "0.4rem 0.75rem",
                     borderRadius: "6px",
                     border: selectedParam === param ? "1px solid #3b82f6" : "1px solid rgba(255,255,255,0.05)",
                     backgroundColor: selectedParam === param ? "rgba(59, 130, 246, 0.15)" : "transparent",
                     color: selectedParam === param ? "#60a5fa" : "#94a3b8",
                     cursor: "pointer",
                     textTransform: "capitalize",
-                    fontSize: "0.8rem",
+                    fontSize: "0.75rem",
                     fontWeight: "500"
                   }}
                 >
-                  {param}
+                  {param.replace("_", " ")}
                 </button>
               ))}
             </div>
@@ -167,6 +177,7 @@ function App() {
             grid={grid}
             selectedParam={selectedParam}
             onSelectPixel={(lat, lon) => setSelectedPixel({ lat, lon })}
+            onZoomChange={setZoom}
           />
         </section>
 
