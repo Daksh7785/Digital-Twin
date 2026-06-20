@@ -3,6 +3,8 @@ import { MapDashboardView } from "./components/MapDashboardView";
 import { ScenarioSimulator } from "./components/ScenarioSimulator";
 import { AlertPanel } from "./components/AlertPanel";
 import { ForecastCharts } from "./components/ForecastCharts";
+import { GraphNetworkView } from "./components/GraphNetworkView";
+import { ClimateExplainer } from "./components/ClimateExplainer";
 
 interface GridPixel {
   lat: number;
@@ -176,8 +178,14 @@ function App() {
       </main>
 
       {/* Bottom Chart View Section */}
-      <section>
+      <section style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "1.5rem" }}>
         <ForecastCharts forecast={forecast} lat={selectedPixel?.lat || 0} lon={selectedPixel?.lon || 0} />
+        <ClimateExplainer enso={globalDrivers.enso} iod={globalDrivers.iod} />
+      </section>
+
+      {/* Network Resilience Section */}
+      <section>
+        <GraphNetworkView />
       </section>
     </div>
   );
