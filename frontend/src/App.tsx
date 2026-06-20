@@ -5,6 +5,9 @@ import { AlertPanel } from "./components/AlertPanel";
 import { ForecastCharts } from "./components/ForecastCharts";
 import { GraphNetworkView } from "./components/GraphNetworkView";
 import { ClimateExplainer } from "./components/ClimateExplainer";
+import { SectoralAdaptationView } from "./components/SectoralAdaptationView";
+import { DataConsumersConfig } from "./components/DataConsumersConfig";
+
 
 interface GridPixel {
   lat: number;
@@ -13,6 +16,8 @@ interface GridPixel {
   rainfall: number;
   lst: number;
   sst: number;
+  country?: string;
+  state?: string;
 }
 
 interface Alert {
@@ -116,6 +121,10 @@ function App() {
     }
   };
 
+  const activePixelData = grid.find(
+    p => selectedPixel && Math.abs(p.lat - selectedPixel.lat) < 0.01 && Math.abs(p.lon - selectedPixel.lon) < 0.01
+  ) || grid[0] || { temperature: 28.4, rainfall: 5.2, lst: 30.1, sst: 26.5, state: "Maharashtra", country: "India" };
+
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", padding: "1.5rem", gap: "1.5rem" }}>
       {/* Header Bar */}
@@ -188,6 +197,19 @@ function App() {
           <AlertPanel alerts={alerts} />
         </section>
       </main>
+
+      {/* Adaptation & Consumers Config Section */}
+      <section style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "1.5rem" }}>
+        <SectoralAdaptationView
+          temperature={activePixelData.temperature}
+          rainfall={activePixelData.rainfall}
+          lst={activePixelData.lst}
+          sst={activePixelData.sst}
+          riskIndex={activePixelData.risk_index || 0}
+          locationName={`${activePixelData.state || "Maharashtra"}, ${activePixelData.country || "India"}`}
+        />
+        <DataConsumersConfig currentGridData={grid} />
+      </section>
 
       {/* Bottom Chart View Section */}
       <section style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "1.5rem" }}>

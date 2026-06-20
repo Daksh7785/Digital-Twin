@@ -190,7 +190,8 @@ export const MapDashboardView: React.FC<MapViewProps> = ({ grid, selectedParam, 
             >
               <Popup>
                 <div style={{ color: "#333", fontSize: "12px" }}>
-                  <strong>Grid (Lat: {pixel.lat}, Lon: {pixel.lon})</strong><br />
+                  <strong>{pixel.state}, {pixel.country}</strong><br />
+                  Grid Coordinate: ({pixel.lat}, {pixel.lon})<br />
                   Temperature: {pixel.temperature?.toFixed(2)} °C<br />
                   Rainfall: {pixel.rainfall?.toFixed(2)} mm<br />
                   INSAT LST: {pixel.lst?.toFixed(2)} °C<br />

@@ -52,7 +52,8 @@ async def get_state(zoom: float = Query(5.0, description="Map zoom level to dyna
         except Exception:
             # Standalone fallback if pipeline service is down
             raw_grid = [
-                {"lat": 20.5, "lon": 78.9, "temperature": 28.4, "rainfall": 5.2, "lst": 30.1, "sst": 26.5, "enso": 0.1, "iod": -0.05}
+                {"lat": 19.5, "lon": 75.5, "temperature": 28.4, "rainfall": 5.2, "lst": 30.1, "sst": 26.5, "enso": 0.1, "iod": -0.05, "country": "India", "state": "Maharashtra"},
+                {"lat": 36.7, "lon": -119.4, "temperature": 22.1, "rainfall": 1.2, "lst": 24.5, "sst": 18.0, "enso": 0.1, "iod": -0.05, "country": "USA", "state": "California"}
             ]
 
     # Apply scenario overlays and calculate risk scores
@@ -82,7 +83,9 @@ async def get_state(zoom: float = Query(5.0, description="Map zoom level to dyna
                 "risk_index": round(risk_index, 2),
                 "flood_risk": round(flood_risk, 2),
                 "drought_risk": round(drought_risk, 2),
-                "heatwave_risk": round(heatwave_risk, 2)
+                "heatwave_risk": round(heatwave_risk, 2),
+                "country": pixel.get("country", "Unknown"),
+                "state": pixel.get("state", "Unknown")
             }
         )
         processed_features.append(feat)
